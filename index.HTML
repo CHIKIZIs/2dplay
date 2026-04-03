@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мини-Выживание: Версия 6.0 (Звуки, Иконки и Графика)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #2c3e50; font-family: Arial, sans-serif; color: white; user-select: none; }
+        canvas { display: block; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
+        
+        /* Главное меню */
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a252f; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; z-index: 200; }
+        #start-screen h1 { font-size: 50px; color: #f1c40f; text-shadow: 2px 2px 5px black; margin-bottom: 20px;}
+        .customizer { background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; border: 2px solid #555; margin-bottom: 20px; text-align: center;}
+        .color-pick { margin: 10px; display: flex; justify-content: space-between; align-items: center; width: 250px;}
+        .start-btn { font-size: 24px; padding: 10px 30px; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .start-btn:hover { background: #2ecc71; transform: scale(1.05); }
+
+        /* Пауза и Крафт */
+        #pause-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; z-index: 150; }
+        #pause-screen h2 { color: #fff; font-size: 36px; margin-top: 0;}
+        #recipe-book { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 60vh; overflow-y: auto; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; width: 80%; max-width: 800px; }
+        .recipe-card { background: #34495e; padding: 10px; border-radius: 5px; border: 1px solid #7f8c8d; display: flex; justify-content: space-between; align-items: center; }
+        .recipe-reqs { font-size: 12px; color: #bdc3c7; }
+        .craft-btn { background: #e67e22; border: none; padding: 5px 10px; color: white; cursor: pointer; border-radius: 3px; }
+        .craft-btn:disabled { background: #7f8c8d; opacity: 0.5; cursor: not-allowed; }
+
+        /* Интерфейс выживания */
+        #status-bars { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+        .bar-wrapper { width: 150px; height: 25px; background: rgba(0, 0, 0, 0.6); border: 2px solid #333; border-radius: 5px; overflow: hidden; position: relative; }
+        .bar { height: 100%; width: 100%; transition: width 0.2s linear; }
+        .bar-text { position: absolute; width: 100%; text-align: center; top: 3px; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px black;}
+        #health-bar { background-color: #e74c3c; } #hunger-bar { background-color: #f1c40f; } #thirst-bar { background-color: #3498db; }
+        #temp-bar { background: linear-gradient(90deg, #3498db 0%, #2ecc71 50%, #e67e22 100%); width: 50%; }
+
+        /* Слоты инвентаря с иконками */
+        #inventory-ui { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; gap: 5px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px; flex-wrap: wrap; justify-content: center; max-width: 500px;}
+        .slot { width: 50px; height: 50px; background: rgba(255,255,255,0.1); border: 2px solid #555; border-radius: 5px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; position: relative; cursor: pointer; padding-top: 2px;}
+        .slot:hover { background: rgba(255,255,255,0.2); border-color: #f1c40f; }
+        .slot-icon { font-size: 24px; line-height: 1; }
+        .slot-qty { position: absolute; bottom: 2px; right: 4px; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 1px black;}
+        .slot-name { font-size: 8px; text-align: center; word-wrap: break-word; line-height: 1; margin-bottom: 2px; }
+
+        #equip-ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; pointer-events: auto; display: flex; flex-direction: column; gap: 5px; border: 1px solid #555; }
+        
+        #quick-actions { position: absolute; top: 10px; right: 10px; pointer-events: auto; display: flex; flex-direction: column; gap: 5px;}
+        .action-btn { padding: 10px; background: #8e44ad; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; border: 1px solid #9b59b6; text-align: center; }
+        .action-btn:hover { background: #9b59b6; }
+
+        #game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 40px; text-align: center; display: none; background: rgba(0,0,0,0.95); padding: 40px; border-radius: 15px; pointer-events: auto; border: 2px solid #e74c3c; z-index: 300;}
+        #world-alert { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: bold; color: #f1c40f; text-shadow: 2px 2px 5px black; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1>МИНИ-ВЫЖИВАНИЕ 6.0</h1>
+        <div class="customizer">
+            <h3>Создание персонажа</h3>
+            <div class="color-pick">Кожа: <input type="color" id="skin-color" value="#f1c27d"></div>
+            <div class="color-pick">Одежда: <input type="color" id="shirt-color" value="#3498db"></div>
+        </div>
+        <button class="start-btn" onclick="startGame()">ИГРАТЬ</button>
+    </div>
+
+    <div id="pause-screen">
+        <h2>МЕНЮ КРАФТА (Пауза)</h2>
+        <div id="workbench-status" style="color:#e74c3c; margin-bottom:10px; font-weight:bold;">ВЕРСТАК НЕ НАЙДЕН (Доступен только базовый крафт)</div>
+        <div id="recipe-book"></div>
+        <button class="start-btn" style="margin-top: 20px;" onclick="togglePause()">ВЕРНУТЬСЯ В ИГРУ (TAB)</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="equip-ui">
+            <div>Оружие: <b id="ui-wpn" style="color:#00d2d3;">Руки</b></div>
+            <div>Броня: <b id="ui-arm" style="color:#f39c12;">Нет</b></div>
+            <div style="font-size:10px; color:#aaa; margin-top:5px;">TAB - Меню крафта</div>
+        </div>
+
+        <div id="quick-actions">
+            <button class="action-btn" id="btn-interact" onclick="interact()" style="display:none;">ВОЙТИ (E)</button>
+            <button class="action-btn" id="btn-flask" onclick="fillFlask()" style="background:#2980b9;">Набрать воды</button>
+            <button class="action-btn" id="btn-cook" onclick="cookMeat()" style="background:#d35400;">Жарить мясо</button>
+        </div>
+
+        <div id="inventory-ui"></div>
+        <div id="world-alert"></div>
+
+        <div id="status-bars">
+            <div class="bar-wrapper"><div id="health-bar" class="bar"></div><div class="bar-text">Здоровье</div></div>
+            <div class="bar-wrapper"><div id="hunger-bar" class="bar"></div><div class="bar-text">Голод</div></div>
+            <div class="bar-wrapper"><div id="thirst-bar" class="bar"></div><div class="bar-text">Жажда</div></div>
+            <div class="bar-wrapper"><div id="temp-bar" class="bar" style="position: absolute; left: 0;"></div><div class="bar-text">Темп.</div></div>
+        </div>
+    </div>
+
+    <div id="game-over">
+        <div id="death-cause">ВЫ УМЕРЛИ</div>
+        <button onclick="location.reload()" style="font-size: 20px; margin-top: 20px; padding: 10px;">Начать заново</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+
+    // --- ЗВУКОВОЙ СИНТЕЗАТОР ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        if (type === 'chop') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        } else if (type === 'mine') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        } else if (type === 'gather') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        } else if (type === 'animal') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'hit') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+            gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        }
+    }
+
+    let gameState = 'MENU';
+    const ZOOM = 1.6; 
+    let animTick = 0;
+    const camera = { x: 0, y: 0 };
+    const keys = { w: false, a: false, s: false, d: false, e: false };
+    const mouse = { x: 0, y: 0, clicked: false };
+
+    window.addEventListener('keydown', e => { 
+        if(gameState === 'MENU') return;
+        let code = e.code;
+        if(code === 'KeyW' || code === 'ArrowUp') keys.w = true;
+        if(code === 'KeyA' || code === 'ArrowLeft') keys.a = true;
+        if(code === 'KeyS' || code === 'ArrowDown') keys.s = true;
+        if(code === 'KeyD' || code === 'ArrowRight') keys.d = true;
+        if(code === 'KeyE') { keys.e = true; interact(); }
+        if(code === 'Tab' || code === 'Escape') { e.preventDefault(); togglePause(); }
+    });
+    window.addEventListener('keyup', e => { 
+        let code = e.code;
+        if(code === 'KeyW' || code === 'ArrowUp') keys.w = false;
+        if(code === 'KeyA' || code === 'ArrowLeft') keys.a = false;
+        if(code === 'KeyS' || code === 'ArrowDown') keys.s = false;
+        if(code === 'KeyD' || code === 'ArrowRight') keys.d = false;
+        if(code === 'KeyE') keys.e = false;
+    });
+    window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    window.addEventListener('mousedown', e => { if(e.button === 0 && gameState === 'PLAY') mouse.clicked = true; });
+
+    // --- БАЗА ПРЕДМЕТОВ С ИКОНКАМИ (ЭМОДЗИ) ---
+    const ITEM_DB = {
+        'wood': { name: 'Дерево', stack: 50, icon: '🪵' }, 'stone': { name: 'Камень', stack: 50, icon: '🪨' },
+        'fibers': { name: 'Волокна', stack: 50, icon: '🌿' }, 'pelt': { name: 'Шкура', stack: 20, icon: '🦊' },
+        'bone': { name: 'Кость', stack: 30, icon: '🦴' },
+        'berry': { name: 'Ягоды', stack: 30, heal: 0, food: 15, water: 5, icon: '🍒' },
+        'shroom': { name: 'Гриб', stack: 20, heal: 20, food: 10, water: 0, icon: '🍄' },
+        'meat': { name: 'Сырое Мясо', stack: 10, heal: -10, food: 25, water: 0, icon: '🥩' },
+        'cooked-meat': { name: 'Жар. Мясо', stack: 10, heal: 15, food: 40, water: 0, icon: '🍖' },
+        'water': { name: 'Вода', stack: 5, heal: 0, food: 0, water: 40, icon: '💧' },
+        'ore_coal': { name: 'Уголь', stack: 50, icon: '⬛' }, 'ore_copper': { name: 'Медная руда', stack: 30, icon: '🟤' },
+        'ore_iron': { name: 'Желез. руда', stack: 30, icon: '⚪' }, 'ore_silver': { name: 'Серебр. руда', stack: 30, icon: '🔘' },
+        'ore_gold': { name: 'Золот. руда', stack: 30, icon: '🟡' }, 'ore_plat': { name: 'Платин. руда', stack: 30, icon: '💿' },
+        'ore_titan': { name: 'Титан. руда', stack: 30, icon: '🔩' }, 'ore_mithril': { name: 'Мифрил. руда', stack: 30, icon: '🔮' },
+        'ore_ruby': { name: 'Рубин', stack: 20, icon: '♦️' }, 'ore_diamond': { name: 'Алмаз', stack: 20, icon: '💎' },
+        'ingot_copper': { name: 'Медный слиток', stack: 20, icon: '🧱' }, 'ingot_iron': { name: 'Желез. слиток', stack: 20, icon: '🔗' },
+        'ingot_gold': { name: 'Золот. слиток', stack: 20, icon: '👑' }, 'ingot_titan': { name: 'Титан. слиток', stack: 20, icon: '🛸' },
+        'backpack': { name: 'Рюкзак', stack: 1, icon: '🎒' }, 'bandage': { name: 'Бинт', stack: 10, heal: 40, food:0, water:0, icon: '🩹' }
+    };
+
+    const RECIPES = [
+        { id: 'workbench', name: 'Верстак', reqs: {wood: 15, stone: 10}, reqBench: false, type: 'build' },
+        { id: 'campfire', name: 'Костер', reqs: {wood: 10, stone: 5}, reqBench: false, type: 'build' },
+        { id: 'axe', name: 'Топор', reqs: {wood: 10, stone: 5}, reqBench: false, type: 'equip' },
+        { id: 'pickaxe', name: 'Кирка', reqs: {wood: 10, stone: 10}, reqBench: false, type: 'equip' },
+        { id: 'spear', name: 'Копье', reqs: {wood: 15, stone: 2, fibers: 5}, reqBench: false, type: 'equip' },
+        { id: 'bandage', name: 'Бинт', reqs: {fibers: 10}, reqBench: false, type: 'item' },
+        { id: 'backpack', name: 'Рюкзак (16 слотов)', reqs: {pelt: 10, fibers: 20}, reqBench: true, type: 'item' },
+        { id: 'ingot_iron', name: 'Железный слиток', reqs: {ore_iron: 2, ore_coal: 1}, reqBench: true, type: 'item' },
+        { id: 'sword', name: 'Каменный Меч', reqs: {wood: 5, stone: 15}, reqBench: true, type: 'equip' },
+        { id: 'iron_sword', name: 'Железный Меч', reqs: {wood: 5, ingot_iron: 10}, reqBench: true, type: 'equip' },
+        { id: 'iron', name: 'Железная Броня', reqs: {ingot_iron: 10, pelt: 5}, reqBench: true, type: 'armor', tier: 3 }
+    ];
+
+    const player = {
+        x: 6000, y: 6000, size: 24, baseSpeed: 2.5, speed: 2.5, 
+        health: 100, hunger: 100, thirst: 100, temp: 50,
+        inv: [], maxSlots: 8, // Увеличено до 8
+        equip: 'hands', armorName: 'none', armorTier: 0, attackTimer: 0,
+        colorSkin: '#f1c27d', colorShirt: '#3498db'
+    };
+
+    for(let i=0; i<player.maxSlots; i++) player.inv.push(null);
+    addItem('berry', 5); addItem('water', 2);
+
+    let isGameOver = false;
+    let inCave = false;
+
+    // Озера увеличены
+    const worlds = {
+        overworld: { size: 12000, resources: [], animals: [], lakes: [], buildables: [], bg: null, spawnCap: 250 },
+        cave: { size: 7500, resources: [], animals: [], lakes: [], buildables: [], bg: null, spawnCap: 120 }
+    };
+    let w = worlds.overworld; 
+
+    // --- ИНВЕНТАРНАЯ ЛОГИКА ---
+    function addItem(id, qty) {
+        if(!ITEM_DB[id]) return false;
+        let maxStack = ITEM_DB[id].stack;
+        for(let i=0; i<player.maxSlots; i++) {
+            if(player.inv[i] && player.inv[i].id === id && player.inv[i].qty < maxStack) {
+                let space = maxStack - player.inv[i].qty;
+                let add = Math.min(space, qty);
+                player.inv[i].qty += add;
+                qty -= add;
+                if(qty <= 0) { renderInv(); return true; }
+            }
+        }
+        for(let i=0; i<player.maxSlots; i++) {
+            if(!player.inv[i]) {
+                let add = Math.min(maxStack, qty);
+                player.inv[i] = {id: id, qty: add};
+                qty -= add;
+                if(qty <= 0) { renderInv(); return true; }
+            }
+        }
+        renderInv(); return false;
+    }
+
+    function countItem(id) { return player.inv.reduce((sum, slot) => slot && slot.id === id ? sum + slot.qty : sum, 0); }
+
+    function removeItem(id, qty) {
+        if(countItem(id) < qty) return false;
+        let left = qty;
+        for(let i = player.maxSlots - 1; i >= 0; i--) {
+            if(player.inv[i] && player.inv[i].id === id) {
+                if(player.inv[i].qty > left) { player.inv[i].qty -= left; left = 0; break; }
+                else { left -= player.inv[i].qty; player.inv[i] = null; }
+            }
+        }
+        renderInv(); return true;
+    }
+
+    function useSlot(index) {
+        let slot = player.inv[index];
+        if(!slot) return;
+        let itm = ITEM_DB[slot.id];
+        if(itm.food !== undefined) { 
+            player.health = Math.min(100, player.health + itm.heal);
+            player.hunger = Math.min(100, player.hunger + itm.food);
+            player.thirst = Math.min(100, player.thirst + itm.water);
+            if(itm.water > 0) player.temp = Math.max(20, player.temp - 5);
+            slot.qty--; if(slot.qty <= 0) player.inv[index] = null;
+            playSound('gather');
+        } else if (slot.id === 'backpack') {
+            if(player.maxSlots < 16) { // Рюкзак дает 16 слотов
+                player.maxSlots = 16;
+                for(let i=0; i<8; i++) player.inv.push(null);
+                slot.qty--; if(slot.qty<=0) player.inv[index] = null;
+                showMessage("СЛОТЫ РАСШИРЕНЫ ДО 16!");
+            }
+        }
+        renderInv(); updateBars();
+    }
+
+    function renderInv() {
+        let html = '';
+        for(let i=0; i<player.maxSlots; i++) {
+            let s = player.inv[i];
+            if(s) {
+                let itm = ITEM_DB[s.id];
+                html += `<div class="slot" onclick="useSlot(${i})">
+                    <div class="slot-icon">${itm.icon}</div>
+                    <div class="slot-name">${itm.name}</div>
+                    <div class="slot-qty">x${s.qty}</div>
+                </div>`;
+            } else { html += `<div class="slot"></div>`; }
+        }
+        document.getElementById('inventory-ui').innerHTML = html;
+        document.getElementById('ui-wpn').innerText = player.equip === 'hands' ? 'Руки' : player.equip;
+        document.getElementById('ui-arm').innerText = player.armorName === 'none' ? 'Нет' : player.armorName;
+    }
+
+    const biomeNodes = [];
+    const biomesList = ['winter', 'forest', 'desert', 'swamp'];
+    for(let i=0; i<150; i++) biomeNodes.push({ x: Math.random() * worlds.overworld.size, y: Math.random() * worlds.overworld.size, type: biomesList[Math.floor(Math.random() * biomesList.length)] });
+
+    function getBiome(x, y) {
+        if(inCave) return 'cave';
+        let minDist = Infinity; let closest = 'forest';
+        for(let n of biomeNodes) { let d = (x - n.x)**2 + (y - n.y)**2; if(d < minDist) { minDist = d; closest = n.type; } }
+        return closest;
+    }
+
+    function createNoisePattern(baseColor, dotColor, density) {
+        const pCan = document.createElement('canvas'); pCan.width = 100; pCan.height = 100;
+        const pCtx = pCan.getContext('2d');
+        pCtx.fillStyle = baseColor; pCtx.fillRect(0,0,100,100);
+        pCtx.fillStyle = dotColor;
+        for(let i=0; i<density; i++) {
+            pCtx.globalAlpha = Math.random() * 0.5;
+            pCtx.fillRect(Math.random()*100, Math.random()*100, Math.random()*3+1, Math.random()*3+1);
+        }
+        return ctx.createPattern(pCan, 'repeat');
+    }
+
+    let patterns = {};
+    function initPatterns() {
+        patterns.winter = createNoisePattern('#ecf0f1', '#bdc3c7', 150);
+        patterns.forest = createNoisePattern('#27ae60', '#2ecc71', 200);
+        patterns.desert = createNoisePattern('#f1c40f', '#f39c12', 300);
+        patterns.swamp = createNoisePattern('#2c3e50', '#1abc9c', 100);
+        patterns.cave = createNoisePattern('#1c2833', '#2c3e50', 250);
+    }
+
+    function generateMap(worldObj, isCave) {
+        worldObj.bg = document.createElement('canvas');
+        worldObj.bg.width = worldObj.size; worldObj.bg.height = worldObj.size;
+        const bgCtx = worldObj.bg.getContext('2d', {alpha: false});
+        const chunkSize = 50;
+
+        for(let x=0; x<worldObj.size; x+=chunkSize) {
+            for(let y=0; y<worldObj.size; y+=chunkSize) {
+                if(isCave) bgCtx.fillStyle = patterns.cave;
+                else bgCtx.fillStyle = patterns[getBiome(x + chunkSize/2, y + chunkSize/2)];
+                bgCtx.fillRect(x, y, chunkSize, chunkSize);
+            }
+        }
+
+        if(!isCave) {
+            for(let i=0; i<120; i++) { 
+                let lx = Math.random()*worldObj.size, ly = Math.random()*worldObj.size;
+                let b = getBiome(lx, ly);
+                let blobs = []; 
+                let mainSize = Math.random() * 150 + 80; // Сделал озера значительно БОЛЬШЕ
+                let numBlobs = Math.floor(Math.random()*4) + 4;
+                for(let j=0; j<numBlobs; j++) blobs.push({ x: lx + (Math.random()-0.5) * mainSize, y: ly + (Math.random()-0.5) * mainSize, r: mainSize * (0.4 + Math.random()*0.6) });
+                worldObj.lakes.push({ x: lx, y: ly, blobs: blobs, biome: b });
+            }
+        }
+    }
+
+    function inWater(tx, ty) {
+        if(inCave) return false;
+        for(let l of w.lakes) {
+            if(Math.abs(tx - l.x) > 300 || Math.abs(ty - l.y) > 300) continue; 
+            for(let b of l.blobs) if (distance(tx, ty, b.x, b.y) < b.r * 0.85) return true;
+        }
+        return false;
+    }
+
+    function spawnWorld() {
+        initPatterns();
+        generateMap(worlds.overworld, false);
+        for(let i=0; i<3000; i++) {
+            let x = Math.random() * worlds.overworld.size, y = Math.random() * worlds.overworld.size;
+            if(inWater(x,y)) continue; 
+            let biome = getBiome(x, y);
+            if (biome === 'forest') {
+                if(Math.random() < 0.6) w.resources.push(createRes('tree', x, y, 50, 40));
+                else if(Math.random() < 0.4) w.resources.push(createRes('bush', x, y, 30, 20));
+                else w.resources.push(createRes('rock', x, y, 40, 80));
+            } else if (biome === 'winter') {
+                if(Math.random() < 0.4) w.resources.push(createRes('dead_tree', x, y, 40, 30));
+                else if(Math.random() < 0.7) w.resources.push(createRes('rock', x, y, 45, 100));
+                else w.resources.push(createRes('iron_rock', x, y, 40, 120));
+            } else if (biome === 'desert') {
+                if(Math.random() < 0.4) w.resources.push(createRes('cactus', x, y, 30, 30));
+                else if(Math.random() < 0.6) w.resources.push(createRes('rock', x, y, 35, 80));
+                else if(Math.random() < 0.8) w.resources.push(createRes('copper_rock', x, y, 30, 100)); 
+                else w.resources.push(createRes('gold_rock', x, y, 30, 150)); 
+            } else if (biome === 'swamp') {
+                if(Math.random() < 0.5) w.resources.push(createRes('dead_tree', x, y, 50, 40));
+                else if(Math.random() < 0.8) w.resources.push(createRes('bush', x, y, 30, 20)); 
+                else w.resources.push(createRes('coal_rock', x, y, 35, 80)); 
+            }
+        }
+        for(let i=0; i<15; i++) worlds.overworld.resources.push(createRes('cave_entrance', Math.random()*worlds.overworld.size, Math.random()*worlds.overworld.size, 80, Infinity));
+        for(let i=0; i<worlds.overworld.spawnCap; i++) spawnRandomAnimal(worlds.overworld);
+
+        generateMap(worlds.cave, true);
+        for(let i=0; i<2000; i++) {
+            let x = Math.random() * worlds.cave.size, y = Math.random() * worlds.cave.size;
+            let r = Math.random();
+            if(r < 0.4) worlds.cave.resources.push(createRes('rock', x, y, 40, 100));
+            else if(r < 0.6) worlds.cave.resources.push(createRes('coal_rock', x, y, 35, 80));
+            else if(r < 0.7) worlds.cave.resources.push(createRes('iron_rock', x, y, 35, 120));
+            else if(r < 0.85) worlds.cave.resources.push(createRes('gold_rock', x, y, 35, 150));
+            else if(r < 0.95) worlds.cave.resources.push(createRes('diamond_rock', x, y, 25, 300));
+            else worlds.cave.resources.push(createRes('glow_shroom', x, y, 25, 20));
+        }
+        worlds.cave.resources.push(createRes('cave_exit', worlds.cave.size/2, worlds.cave.size/2, 80, Infinity));
+        worlds.cave.animals.push(createAnimal('golden_bear', Math.random()*worlds.cave.size, Math.random()*worlds.cave.size, 80, 1.2, 800, true, 'cave'));
+        for(let i=0; i<worlds.cave.spawnCap; i++) spawnRandomAnimal(worlds.cave);
+    }
+
+    function createRes(type, x, y, size, hp) {
+        let pts = [];
+        if(type.includes('rock') || type === 'cave_entrance' || type === 'cave_exit') {
+            for(let i=0; i<7; i++) { // Делаем камни менее круглыми, 7 точек
+                let ang = (i/7)*Math.PI*2;
+                pts.push({ x: Math.cos(ang)*(size/2 + (Math.random()-0.5)*20), y: Math.sin(ang)*(size/2 + (Math.random()-0.5)*20) });
+            }
+        }
+        return { type: type, x: x, y: y, size: size, hp: hp, maxHp: hp, pts: pts }; 
+    }
+
+    function createAnimal(type, x, y, size, speed, hp, aggressive, homeBiome) {
+        return { type: type, x: x, y: y, size: size, baseSpeed: speed, speed: speed, hp: hp, maxHp: hp, aggressive: aggressive, homeBiome: homeBiome, vx: 0, vy: 0, timer: 0, anim: 0 };
+    }
+
+    function distance(x1, y1, x2, y2) { return Math.sqrt((x1-x2)**2 + (y1-y2)**2); }
+
+    function showMessage(msg) {
+        let el = document.getElementById('world-alert');
+        el.innerText = msg; el.style.opacity = 1;
+        setTimeout(() => el.style.opacity = 0, 3000);
+    }
+
+    function togglePause() {
+        if(gameState === 'MENU' || isGameOver) return;
+        if(gameState === 'PLAY') {
+            gameState = 'PAUSE';
+            document.getElementById('pause-screen').style.display = 'flex';
+            renderRecipeBook();
+        } else {
+            gameState = 'PLAY';
+            document.getElementById('pause-screen').style.display = 'none';
+        }
+    }
+
+    function isNearWorkbench() { return w.buildables.some(b => b.type === 'workbench' && distance(player.x, player.y, b.x, b.y) < 100); }
+
+    function renderRecipeBook() {
+        let nearWB = isNearWorkbench();
+        document.getElementById('workbench-status').style.display = nearWB ? 'none' : 'block';
+        let html = '';
+        RECIPES.forEach(r => {
+            let canCraft = true; let reqStr = [];
+            for(let k in r.reqs) {
+                let has = countItem(k); reqStr.push(`${ITEM_DB[k]?ITEM_DB[k].name:k}: ${has}/${r.reqs[k]}`);
+                if(has < r.reqs[k]) canCraft = false;
+            }
+            if(r.reqBench && !nearWB) canCraft = false;
+            let btnTxt = r.reqBench && !nearWB ? 'Нужен Верстак' : 'Скрафтить';
+            html += `<div class="recipe-card">
+                <div><div style="font-weight:bold; color:#f1c40f;">${r.name}</div><div class="recipe-reqs">${reqStr.join(' | ')}</div></div>
+                <button class="craft-btn" ${canCraft ? `onclick="craftItem('${r.id}')"` : 'disabled'}>${btnTxt}</button>
+            </div>`;
+        });
+        document.getElementById('recipe-book').innerHTML = html;
+    }
+
+    function craftItem(id) {
+        let rec = RECIPES.find(r => r.id === id);
+        if(!rec) return;
+        for(let k in rec.reqs) removeItem(k, rec.reqs[k]);
+        if(rec.type === 'build') w.buildables.push({type: id, x: player.x, y: player.y});
+        else if(rec.type === 'equip') player.equip = rec.id;
+        else if(rec.type === 'armor') { player.armorName = rec.name; player.armorTier = rec.tier; }
+        else addItem(rec.id, 1);
+        renderRecipeBook(); renderInv(); playSound('gather');
+    }
+
+    function fillFlask() { if(inWater(player.x, player.y)) addItem('water', 1); }
+    function cookMeat() {
+        if(w.buildables.some(b => b.type === 'campfire' && distance(player.x, player.y, b.x, b.y) < 80)) {
+            if(removeItem('meat', 1)) addItem('cooked-meat', 1);
+        } else showMessage("НУЖЕН КОСТЕР РЯДОМ!");
+    }
+
+    function interact() {
+        let reach = 100;
+        for (let r of w.resources) {
+            if ((r.type === 'cave_entrance' || r.type === 'cave_exit') && distance(player.x, player.y, r.x, r.y) < reach) {
+                if(r.type === 'cave_entrance') {
+                    player.savedX = player.x; player.savedY = player.y;
+                    inCave = true; w = worlds.cave;
+                    player.x = worlds.cave.size/2; player.y = worlds.cave.size/2 + 100;
+                    showMessage("ПОДЗЕМЕЛЬЕ");
+                } else {
+                    inCave = false; w = worlds.overworld;
+                    player.x = player.savedX || 6000; player.y = player.savedY || 6000;
+                    showMessage("ПОВЕРХНОСТЬ");
+                }
+                return;
+            }
+        }
+    }
+
+    function spawnRandomAnimal(worldObj) {
+        let x, y;
+        do { x = Math.random() * worldObj.size; y = Math.random() * worldObj.size; } 
+        while(distance(player.x, player.y, x, y) < 800 && worldObj === w);
+
+        let isCaveObj = worldObj === worlds.cave;
+        if(isCaveObj) {
+            let r = Math.random();
+            if(r < 0.4) worldObj.animals.push(createAnimal('bat', x, y, 20, 1.8, 20, true, 'cave'));
+            else if(r < 0.8) worldObj.animals.push(createAnimal('spider', x, y, 30, 1.5, 40, true, 'cave'));
+            else worldObj.animals.push(createAnimal('golem', x, y, 45, 0.6, 250, true, 'cave'));
+            return;
+        }
+        if(inWater(x,y)) return;
+        let biome = getBiome(x, y);
+        let list = [];
+        if (biome === 'forest') list = [{t:'deer', p:0.3, hp:30, s:1.4, a:false}, {t:'wolf', p:0.5, hp:50, s:1.3, a:true}, {t:'fox', p:0.7, hp:20, s:1.5, a:false}, {t:'rabbit', p:0.85, hp:10, s:1.6, a:false}, {t:'boar', p:0.95, hp:60, s:1.1, a:true}, {t:'bear', p:1, hp:120, s:0.9, a:true}];
+        else if (biome === 'winter') list = [{t:'wolf', p:0.7, hp:50, s:1.2, a:true}, {t:'polar_bear', p:0.85, hp:150, s:1.0, a:true}];
+        else if (biome === 'desert') list = [{t:'camel', p:0.7, hp:80, s:0.8, a:false}];
+        else if (biome === 'swamp') list = [{t:'crocodile', p:0.5, hp:100, s:0.9, a:true}, {t:'frog', p:1, hp:10, s:1.2, a:false}];
+        
+        let r = Math.random();
+        for(let l of list) { if(r <= l.p) { worldObj.animals.push(createAnimal(l.t, x, y, l.t==='bear'?40:25, l.s, l.hp, l.a, biome)); break; } }
+    }
+
+    function handleAttack() {
+        if (!mouse.clicked || player.attackTimer > 0) return;
+        let targetX = (mouse.x / ZOOM) + camera.x; let targetY = (mouse.y / ZOOM) + camera.y;
+        
+        let reach = player.equip.includes('spear') ? 110 : 75; 
+        let dmg = 8;
+        if(player.equip.includes('sword')) dmg = 30; else if(player.equip === 'spear') dmg = 25; else if(['axe','pickaxe'].includes(player.equip)) dmg = 15;
+
+        playSound('hit');
+
+        for (let i = w.animals.length - 1; i >= 0; i--) {
+            let a = w.animals[i];
+            if (distance(player.x, player.y, a.x, a.y) < reach && distance(targetX, targetY, a.x, a.y) < a.size + 20) {
+                a.hp -= dmg;
+                a.x += (a.x - player.x) * 0.15; a.y += (a.y - player.y) * 0.15;
+                a.timer = 0; playSound('animal');
+                if (a.hp <= 0) {
+                    addItem('meat', a.size > 30 ? 2 : 1);
+                    if (['bear', 'wolf', 'camel', 'deer', 'fox', 'crocodile', 'polar_bear', 'boar'].includes(a.type)) { addItem('pelt', 1); if(Math.random()<0.6) addItem('bone', 1); }
+                    if (a.type === 'golden_bear') { addItem('ore_gold', 15); addItem('meat', 10); addItem('bone', 5); showMessage("БОСС ПОВЕРЖЕН!"); }
+                    w.animals.splice(i, 1);
+                }
+                player.attackTimer = 20; return;
+            }
+        }
+
+        let rockDmg = player.equip === 'pickaxe' ? 50 : (player.equip === 'axe' ? 10 : 5);
+        let woodDmg = player.equip === 'axe' ? 50 : (player.equip === 'pickaxe' ? 10 : 5);
+
+        for (let i = w.resources.length - 1; i >= 0; i--) {
+            let r = w.resources[i];
+            if (r.hp === Infinity) continue;
+            if (distance(player.x, player.y, r.x, r.y) < reach && distance(targetX, targetY, r.x, r.y) < r.size) {
+                
+                if(r.type.includes('rock')) playSound('mine');
+                else if(r.type.includes('tree')) playSound('chop');
+                else playSound('gather');
+
+                r.hp -= (r.type.includes('rock') ? rockDmg : woodDmg);
+                if (r.hp <= 0) {
+                    if (r.type.includes('tree')) addItem('wood', Math.floor(Math.random()*4)+2);
+                    else if (r.type === 'bush') { addItem('berry', Math.floor(Math.random()*3)+1); addItem('fibers', Math.floor(Math.random()*2)+1); }
+                    else if (r.type === 'glow_shroom') { addItem('shroom', 1); }
+                    else {
+                        addItem('stone', Math.floor(Math.random()*2)+1);
+                        let oreType = r.type.replace('_rock', '');
+                        if(oreType !== 'rock' && ITEM_DB[`ore_${oreType}`]) addItem(`ore_${oreType}`, Math.floor(Math.random()*3)+1);
+                    }
+                    w.resources.splice(i, 1);
+                }
+                player.attackTimer = 20; return;
+            }
+        }
+        player.attackTimer = 10; 
+    }
+
+    function updateAnimals() {
+        if(w.animals.length < w.spawnCap && Math.random() < 0.05) spawnRandomAnimal(w);
+        w.animals.forEach(a => {
+            a.timer--; a.anim++;
+            a.speed = inWater(a.x, a.y) ? a.baseSpeed * 0.4 : a.baseSpeed;
+            let distToPlayer = distance(player.x, player.y, a.x, a.y);
+
+            if (a.aggressive) {
+                if (distToPlayer < 300) { 
+                    let angle = Math.atan2(player.y - a.y, player.x - a.x);
+                    a.vx = Math.cos(angle) * a.speed; a.vy = Math.sin(angle) * a.speed;
+                    if (distToPlayer < a.size/2 + player.size/2 + 5) {
+                        let dmg = a.type === 'golden_bear' ? 25 : (a.type==='golem' ? 15 : 5);
+                        let red = [1.0, 0.8, 0.6, 0.4, 0.2, 0.1][player.armorTier];
+                        player.health -= dmg * red;
+                        a.timer = 30; a.vx = -a.vx*2; a.vy = -a.vy*2; playSound('hit');
+                    }
+                } else if (a.timer <= 0) {
+                    let angle = Math.random() * Math.PI * 2;
+                    a.vx = Math.cos(angle) * (a.speed * 0.3); a.vy = Math.sin(angle) * (a.speed * 0.3);
+                    a.timer = Math.random() * 100 + 50;
+                }
+            } else {
+                if (distToPlayer < 200) { 
+                    let angle = Math.atan2(a.y - player.y, a.x - player.x); 
+                    a.vx = Math.cos(angle) * (a.speed * 1.5); a.vy = Math.sin(angle) * (a.speed * 1.5);
+                } else if (a.timer <= 0) {
+                    let angle = Math.random() * Math.PI * 2;
+                    a.vx = Math.cos(angle) * (a.speed * 0.3); a.vy = Math.sin(angle) * (a.speed * 0.3);
+                    a.timer = Math.random() * 150 + 50;
+                }
+            }
+            a.x += a.vx; a.y += a.vy;
+            if(a.x < 50) { a.x = 50; a.vx *= -1; } if(a.x > w.size-50) { a.x = w.size-50; a.vx *= -1; }
+            if(a.y < 50) { a.y = 50; a.vy *= -1; } if(a.y > w.size-50) { a.y = w.size-50; a.vy *= -1; }
+            
+            // Звук шагов или рычания иногда
+            if(distToPlayer < 400 && Math.random() < 0.005) playSound('animal');
+        });
+    }
+
+    function update() {
+        if (isGameOver || gameState !== 'PLAY') return;
+        animTick++;
+
+        player.speed = inWater(player.x, player.y) ? player.baseSpeed * 0.5 : player.baseSpeed;
+        if(player.armorTier >= 3) player.speed *= 0.9; 
+
+        if (keys.w && player.y > player.size) player.y -= player.speed;
+        if (keys.s && player.y < w.size - player.size) player.y += player.speed;
+        if (keys.a && player.x > player.size) player.x -= player.speed;
+        if (keys.d && player.x < w.size - player.size) player.x += player.speed;
+
+        camera.x = player.x - (canvas.width / 2) / ZOOM;
+        camera.y = player.y - (canvas.height / 2) / ZOOM;
+
+        player.hunger -= 0.002; player.thirst -= 0.004;
+        let currentBiome = getBiome(player.x, player.y);
+        let targetTemp = currentBiome === 'winter' ? 10 : (currentBiome === 'desert' ? 90 : (inCave ? 35 : 50));
+        
+        w.buildables.forEach(b => { if(b.type === 'campfire' && distance(player.x, player.y, b.x, b.y) < 200) targetTemp = 60; });
+        if (player.armorTier > 0) { if (targetTemp < 50) targetTemp += 20; if (targetTemp > 50) targetTemp -= 10; }
+        
+        if (player.temp < targetTemp) player.temp += 0.05; if (player.temp > targetTemp) player.temp -= 0.05;
+
+        if (player.hunger > 70 && player.thirst > 70 && player.temp > 40 && player.temp < 60) player.health = Math.min(100, player.health + 0.03);
+        if (player.hunger <= 0) { player.hunger = 0; player.health -= 0.02; }
+        if (player.thirst <= 0) { player.thirst = 0; player.health -= 0.04; }
+        if (player.temp < 20 || player.temp > 80) player.health -= 0.05; 
+
+        if (player.attackTimer > 0) player.attackTimer--;
+        handleAttack(); mouse.clicked = false; updateAnimals();
+
+        if (player.health <= 0) {
+            isGameOver = true; document.getElementById('game-over').style.display = 'block';
+            document.getElementById('death-cause').innerText = "ВЫ ПОГИБЛИ";
+        }
+        updateBars();
+        let btn = document.getElementById('btn-interact');
+        if(w.resources.some(r => (r.type === 'cave_entrance' || r.type === 'cave_exit') && distance(player.x, player.y, r.x, r.y) < 100)) { btn.style.display = 'block'; btn.innerText = inCave ? 'ВЫЙТИ (E)' : 'ВОЙТИ (E)'; } 
+        else btn.style.display = 'none';
+    }
+
+    function updateBars() {
+        document.getElementById('health-bar').style.width = Math.max(0, player.health) + '%';
+        document.getElementById('hunger-bar').style.width = Math.max(0, player.hunger) + '%';
+        document.getElementById('thirst-bar').style.width = Math.max(0, player.thirst) + '%';
+        let tempEl = document.getElementById('temp-bar');
+        tempEl.style.width = '10px'; tempEl.style.left = Math.max(0, Math.min(100, player.temp)) + '%';
+    }
+
+    const ORE_COLORS = { 'rock':'#7f8c8d', 'coal_rock':'#2c3e50', 'copper_rock':'#d35400', 'iron_rock':'#bdc3c7', 'silver_rock':'#ecf0f1', 'gold_rock':'#f1c40f', 'plat_rock':'#e0f7fa', 'titan_rock':'#34495e', 'mithril_rock':'#9b59b6', 'ruby_rock':'#e74c3c', 'diamond_rock':'#00ffff' };
+
+    function drawResource(o) {
+        ctx.save(); ctx.translate(o.x, o.y);
+        if (ORE_COLORS[o.type] || o.type.includes('cave')) {
+            // Рисуем тень (объем) камня
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath(); ctx.moveTo(o.pts[0].x+3, o.pts[0].y+3); for(let i=1; i<o.pts.length; i++) ctx.lineTo(o.pts[i].x+3, o.pts[i].y+3); ctx.fill();
+            
+            // Сам камень
+            ctx.fillStyle = ORE_COLORS[o.type] || '#111';
+            ctx.beginPath(); ctx.moveTo(o.pts[0].x, o.pts[0].y); for(let i=1; i<o.pts.length; i++) ctx.lineTo(o.pts[i].x, o.pts[i].y); ctx.closePath(); ctx.fill();
+            
+            // Внутренние грани камня для реалистичности
+            if(!o.type.includes('cave')) {
+                ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.moveTo(o.pts[0].x, o.pts[0].y); ctx.lineTo(o.pts[2].x, o.pts[2].y); ctx.lineTo(0,0); ctx.fill();
+                ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.moveTo(o.pts[3].x, o.pts[3].y); ctx.lineTo(o.pts[5].x, o.pts[5].y); ctx.lineTo(0,0); ctx.fill();
+            } else {
+                ctx.fillStyle = inCave ? '#2ecc71' : '#000'; ctx.beginPath(); ctx.arc(0,0, o.size/3, 0, Math.PI*2); ctx.fill();
+            }
+        } else if (o.type === 'tree') {
+            // Видимый ствол
+            ctx.fillStyle = '#6e2c00'; ctx.fillRect(-o.size/6, -o.size/2, o.size/3, o.size);
+            // Листва со слоями
+            ctx.fillStyle = '#1e8449'; ctx.beginPath(); ctx.arc(0, -o.size/4, o.size/2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#229954'; ctx.beginPath(); ctx.arc(o.size/6, -o.size/3, o.size/2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#27ae60'; ctx.beginPath(); ctx.arc(-o.size/6, -o.size/5, o.size/3, 0, Math.PI*2); ctx.fill();
+        } else if (o.type === 'dead_tree') {
+            ctx.fillStyle = '#4e342e'; ctx.fillRect(-5, -o.size/2, 10, o.size); 
+            ctx.strokeStyle = '#4e342e'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(15, -15); ctx.stroke(); ctx.moveTo(0, 10); ctx.lineTo(-12, 5); ctx.stroke();
+        } else if (o.type === 'bush') {
+            ctx.fillStyle = '#229954'; ctx.beginPath(); ctx.arc(0, 0, o.size/2, 0, Math.PI*2); ctx.fill();
+            if(o.hp > 0) { ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(-6, -6, 3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(8, 4, 3, 0, Math.PI*2); ctx.fill(); }
+        }
+        ctx.restore();
+    }
+
+    function drawAnimal(o) {
+        ctx.save(); ctx.translate(o.x, o.y);
+        let angle = Math.atan2(o.vy, o.vx); ctx.rotate(angle);
+        
+        let moving = Math.abs(o.vx)>0.1 || Math.abs(o.vy)>0.1;
+        let legAnim = moving ? Math.sin(animTick*0.3)*5 : 0;
+        
+        // Рисуем лапы под телом
+        if(['wolf','bear','polar_bear','golden_bear','deer'].includes(o.type)) {
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(-o.size/3 + legAnim, -o.size/3, 4, 0, Math.PI*2); ctx.fill(); 
+            ctx.beginPath(); ctx.arc(o.size/3 - legAnim, -o.size/3, 4, 0, Math.PI*2); ctx.fill();  
+            ctx.beginPath(); ctx.arc(-o.size/3 - legAnim, o.size/3, 4, 0, Math.PI*2); ctx.fill();  
+            ctx.beginPath(); ctx.arc(o.size/3 + legAnim, o.size/3, 4, 0, Math.PI*2); ctx.fill();   
+        }
+
+        if (o.type === 'wolf') {
+            // Хвост
+            ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.ellipse(-o.size/2-5, 0, 8, 3, 0, 0, Math.PI*2); ctx.fill();
+            // Тело
+            ctx.fillStyle = '#95a5a6'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/2.5, 0, 0, Math.PI*2); ctx.fill();
+            // Голова и морда
+            ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.arc(o.size/2, 0, 8, 0, Math.PI*2); ctx.fill(); 
+            ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(o.size/2 + 8, 0, 2, 0, Math.PI*2); ctx.fill(); // нос
+            // Уши
+            ctx.fillStyle = '#34495e'; ctx.beginPath(); ctx.moveTo(o.size/2, -5); ctx.lineTo(o.size/2-5, -10); ctx.lineTo(o.size/2-5, -2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(o.size/2, 5); ctx.lineTo(o.size/2-5, 10); ctx.lineTo(o.size/2-5, 2); ctx.fill();
+        } else if (o.type === 'bear' || o.type === 'polar_bear' || o.type === 'golden_bear') {
+            let col = o.type === 'bear' ? '#5d4037' : (o.type==='polar_bear' ? '#ecf0f1' : '#f1c40f');
+            // Тело мощное
+            ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2.2, o.size/1.8, 0, 0, Math.PI*2); ctx.fill();
+            // Голова
+            ctx.beginPath(); ctx.arc(o.size/2 + 2, 0, o.size/3, 0, Math.PI*2); ctx.fill();
+            // Круглые уши
+            ctx.beginPath(); ctx.arc(o.size/2-2, -o.size/3, 4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(o.size/2-2, o.size/3, 4, 0, Math.PI*2); ctx.fill();
+            // Глаза и нос
+            ctx.fillStyle = o.type==='golden_bear' ? '#e74c3c' : '#111'; 
+            ctx.beginPath(); ctx.arc(o.size/2 + 6, -4, 2, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(o.size/2 + 6, 4, 2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(o.size/2 + 10, 0, 3, 0, Math.PI*2); ctx.fill(); // нос
+        } else if (o.type === 'deer') {
+            ctx.fillStyle = '#a0522d'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/3, 0, 0, Math.PI*2); ctx.fill(); 
+            ctx.fillStyle = '#a0522d'; ctx.beginPath(); ctx.arc(o.size/2 + 5, 0, 6, 0, Math.PI*2); ctx.fill(); 
+            // Рога
+            ctx.strokeStyle = '#e67e22'; ctx.lineWidth=2; 
+            ctx.beginPath(); ctx.moveTo(o.size/2+2, -4); ctx.lineTo(o.size/2+5, -15); ctx.lineTo(o.size/2+10, -18); ctx.stroke(); 
+            ctx.beginPath(); ctx.moveTo(o.size/2+2, 4); ctx.lineTo(o.size/2+5, 15); ctx.lineTo(o.size/2+10, 18); ctx.stroke();
+        } else {
+            // Для остальных оставим простую графику, чтобы не перегружать код
+            ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(0,0,o.size/2,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function draw() {
+        if(gameState === 'MENU') return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save(); ctx.scale(ZOOM, ZOOM); ctx.translate(-camera.x, -camera.y);
+
+        ctx.drawImage(w.bg, 0, 0);
+        
+        if(!inCave) {
+            ctx.fillStyle = `rgba(52, 152, 219, ${0.5 + Math.sin(animTick*0.05)*0.1})`;
+            w.lakes.forEach(l => {
+                let pDx = l.x - player.x, pDy = l.y - player.y;
+                if(pDx*pDx + pDy*pDy > 1000000) return; 
+                ctx.beginPath();
+                l.blobs.forEach(b => { ctx.moveTo(b.x, b.y); ctx.arc(b.x, b.y, b.r + Math.sin(animTick*0.02 + b.x)*5, 0, Math.PI*2); });
+                ctx.fill();
+            });
+        }
+
+        let renderQueue = [];
+        w.resources.forEach(r => renderQueue.push({ type: 'res', obj: r, y: r.y }));
+        w.animals.forEach(a => renderQueue.push({ type: 'animal', obj: a, y: a.y }));
+        w.buildables.forEach(b => renderQueue.push({ type: 'buildable', obj: b, y: b.y }));
+        renderQueue.push({ type: 'player', obj: player, y: player.y });
+        renderQueue.sort((a, b) => a.y - b.y);
+
+        let viewX = camera.x, viewY = camera.y, viewW = canvas.width/ZOOM, viewH = canvas.height/ZOOM;
+
+        renderQueue.forEach(item => {
+            let o = item.obj;
+            if(o.x < viewX - 100 || o.x > viewX + viewW + 100 || o.y < viewY - 100 || o.y > viewY + viewH + 100) return;
+
+            if (item.type === 'res') drawResource(o);
+            else if (item.type === 'buildable') {
+                if (o.type === 'campfire') {
+                    ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.arc(o.x, o.y, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#e67e22'; ctx.beginPath(); ctx.arc(o.x, o.y, 8 + Math.sin(animTick*0.2)*2, 0, Math.PI*2); ctx.fill(); 
+                } else if (o.type === 'workbench') {
+                    ctx.fillStyle = '#8d6e63'; ctx.fillRect(o.x-15, o.y-10, 30, 20);
+                }
+            } else if (item.type === 'animal') drawAnimal(o);
+            else if (item.type === 'player') {
+                let angle = Math.atan2((mouse.y/ZOOM + camera.y) - o.y, (mouse.x/ZOOM + camera.x) - o.x);
+                let isMoving = keys.w || keys.a || keys.s || keys.d; let walkAnim = isMoving ? Math.sin(animTick*0.3)*4 : 0;
+                ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(angle);
+
+                ctx.fillStyle = player.colorShirt; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2 - 2, o.size/1.5, 0, 0, Math.PI*2); ctx.fill();
+                let armorColors = ['none', '#d35400', '#ecf0f1', '#bdc3c7', '#f1c40f', '#34495e'];
+                if(player.armorTier > 0) { ctx.fillStyle = armorColors[player.armorTier]; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2 + 1, o.size/1.4 + 1, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke(); }
+
+                ctx.fillStyle = player.colorSkin; ctx.beginPath(); ctx.arc(o.size/4, 0, 10, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(o.size/4 + 4, -4, 3, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(o.size/4 + 4, 4, 3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(o.size/4 + 5, -4, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(o.size/4 + 5, 4, 1.5, 0, Math.PI*2); ctx.fill();
+
+                let hitOffset = player.attackTimer > 10 ? 0.5 : 0;
+                let rHandX = o.size/2 + walkAnim, rHandY = 12; let lHandX = o.size/2 - walkAnim, lHandY = -12;
+                if (player.equip !== 'hands') { rHandX += 5 + (hitOffset*20); rHandY -= hitOffset*10; }
+                ctx.fillStyle = player.colorSkin; ctx.beginPath(); ctx.arc(lHandX, lHandY, 4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(rHandX, rHandY, 4, 0, Math.PI*2); ctx.fill();
+
+                if (player.equip !== 'hands') {
+                    let wColor = player.equip.includes('sword') ? '#bdc3c7' : '#8d6e63';
+                    ctx.strokeStyle = wColor; ctx.lineWidth = player.equip.includes('sword') ? 3 : 4;
+                    ctx.beginPath(); ctx.moveTo(rHandX, rHandY);
+                    let wLen = player.equip === 'spear' ? 40 : 25; 
+                    let tipX = rHandX + wLen, tipY = rHandY; ctx.lineTo(tipX, tipY); ctx.stroke();
+                    if (player.equip === 'axe') { ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.arc(tipX - 5, tipY, 6, -Math.PI/2, Math.PI/2); ctx.fill(); } 
+                    else if (player.equip === 'pickaxe') { ctx.fillStyle = '#bdc3c7'; ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(tipX - 8, tipY + 12); ctx.lineTo(tipX - 8, tipY - 12); ctx.fill(); } 
+                }
+                ctx.restore();
+            }
+        });
+
+        ctx.restore();
+        
+        if(inCave) {
+            let grd = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 50, canvas.width/2, canvas.height/2, 400);
+            grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,0.9)');
+            ctx.fillStyle = grd; ctx.fillRect(0,0, canvas.width, canvas.height);
+        }
+    }
+
+    function startGame() {
+        // Запуск аудио контекста происходит по клику (требование браузеров)
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        player.colorSkin = document.getElementById('skin-color').value;
+        player.colorShirt = document.getElementById('shirt-color').value;
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('ui-layer').style.display = 'block';
+        gameState = 'PLAY';
+        renderInv();
+    }
+
+    spawnWorld();
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+</script>
+</body>
+</html>
