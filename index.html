@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мини-Выживание: Большой Мир 2.0</title>
+    <style>
+        body {
+            margin: 0; overflow: hidden;
+            background-color: #27ae60;
+            font-family: Arial, sans-serif;
+            color: white; user-select: none;
+        }
+        canvas { display: block; }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        
+        #status-bars {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px;
+        }
+        .bar-wrapper {
+            width: 150px; height: 25px; background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #333; border-radius: 5px; overflow: hidden; position: relative;
+        }
+        .bar { height: 100%; width: 100%; transition: width 0.2s linear; }
+        .bar-text { position: absolute; width: 100%; text-align: center; top: 3px; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 2px black;}
+        
+        #health-bar { background-color: #e74c3c; }
+        #hunger-bar { background-color: #f1c40f; }
+        #thirst-bar { background-color: #3498db; }
+        #temp-bar { background: linear-gradient(90deg, #3498db 0%, #2ecc71 50%, #e67e22 100%); width: 50%; }
+
+        #inventory {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
+            pointer-events: auto; border: 1px solid #555;
+            max-height: 90vh; overflow-y: auto;
+        }
+        .inv-item { margin: 5px 0; font-size: 14px; display: flex; justify-content: space-between; gap: 15px; align-items: center;}
+        .inv-item button { padding: 2px 5px; font-size: 12px; }
+
+        #crafting {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px;
+            pointer-events: auto; display: flex; flex-direction: column; gap: 8px; border: 1px solid #555;
+            max-height: 90vh; overflow-y: auto;
+        }
+        button {
+            padding: 8px 12px; font-size: 13px; cursor: pointer;
+            background: #2c3e50; color: white; border: 1px solid #34495e; border-radius: 4px;
+        }
+        button:hover { background: #34495e; }
+        button:disabled { background: #7f8c8d; cursor: not-allowed; border-color: #95a5a6; }
+
+        #game-over {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 40px; text-align: center; display: none;
+            background: rgba(0,0,0,0.95); padding: 40px; border-radius: 15px; pointer-events: auto; border: 2px solid #e74c3c;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="inventory">
+            <h3 style="margin-top:0;">Инвентарь</h3>
+            <div class="inv-item">Ягоды: <span id="inv-berries">0</span> <button onclick="consume('berry')">Съесть (+Еда)</button></div>
+            <div class="inv-item">Сырое мясо: <span id="inv-meat">0</span> <button onclick="consume('meat')">Съесть (-Здоровье)</button></div>
+            <div class="inv-item" style="color: #ff9f43;">Жареное мясо: <span id="inv-cooked-meat">0</span> <button onclick="consume('cooked-meat')">Съесть (+Здоровье)</button></div>
+            <div class="inv-item">Вода: <span id="inv-water">0</span> <button onclick="consume('water')">Пить</button></div>
+            <hr style="border-color:#333; margin: 10px 0;">
+            <div class="inv-item">Дерево: <span id="inv-wood">0</span></div>
+            <div class="inv-item">Камень: <span id="inv-stone">0</span></div>
+            <div class="inv-item">Волокна: <span id="inv-fibers">0</span></div>
+            <div class="inv-item">Шкуры: <span id="inv-pelt">0</span></div>
+            <div class="inv-item" style="color: gold;">Золото: <span id="inv-gold">0</span></div>
+            <hr style="border-color:#333; margin: 10px 0;">
+            <div class="inv-item" style="color:#00d2d3; justify-content: flex-start;">Оружие: <span id="inv-equip" style="margin-left:5px;">Руки</span></div>
+            <div class="inv-item" style="color:#f39c12; justify-content: flex-start;">Одежда: <span id="inv-clothes" style="margin-left:5px;">Нет</span></div>
+        </div>
+
+        <div id="crafting">
+            <h3 style="margin-top:0;">Крафт & Действия</h3>
+            <button id="btn-axe" onclick="craft('axe')">Топор (10 Дерева, 5 Камня)</button>
+            <button id="btn-spear" onclick="craft('spear')">Копье (15 Дерева, 2 Камня, 5 Волокон)</button>
+            <button id="btn-sword" onclick="craft('sword')">Меч (15 Дерева, 10 Камня)</button>
+            <button id="btn-clothes" onclick="craft('clothes')">Одежда (5 Шкур)</button>
+            <button id="btn-bandage" onclick="craft('bandage')">Бинт (+30 ХП) (10 Волокон)</button>
+            <button id="btn-campfire" onclick="craft('campfire')">Костер (15 Дерева, 10 Камня)</button>
+            <button id="btn-cook" onclick="craft('cook')">Пожарить мясо (Нужен Костер)</button>
+            <button id="btn-flask" onclick="craft('flask')">Собрать Воду (У Озера)</button>
+        </div>
+
+        <div id="status-bars">
+            <div class="bar-wrapper"><div id="health-bar" class="bar"></div><div class="bar-text">Здоровье</div></div>
+            <div class="bar-wrapper"><div id="hunger-bar" class="bar"></div><div class="bar-text">Голод</div></div>
+            <div class="bar-wrapper"><div id="thirst-bar" class="bar"></div><div class="bar-text">Жажда</div></div>
+            <div class="bar-wrapper"><div id="temp-bar" class="bar" style="position: absolute; left: 0;"></div><div class="bar-text">Темп.</div></div>
+        </div>
+    </div>
+
+    <div id="game-over">
+        <div id="death-cause">ВЫ УМЕРЛИ</div>
+        <button onclick="location.reload()" style="font-size: 20px; margin-top: 20px;">Играть снова</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const WORLD_SIZE = 4000; 
+    const ZOOM = 1.6; // Камера теперь намного ближе
+    const camera = { x: 0, y: 0 };
+
+    const keys = { w: false, a: false, s: false, d: false };
+    const mouse = { x: 0, y: 0, clicked: false };
+
+    window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+    window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+    window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    window.addEventListener('mousedown', e => { if(e.button === 0) mouse.clicked = true; });
+
+    const player = {
+        x: 2000, y: 2000,
+        size: 24, speed: 2.2, 
+        health: 100, hunger: 100, thirst: 100, temp: 50,
+        inventory: { berries: 3, water: 2, wood: 0, stone: 0, meat: 0, cookedMeat: 0, pelt: 0, gold: 0, fibers: 0 },
+        equip: 'hands', hasClothes: false,
+        attackTimer: 0
+    };
+
+    const resources = []; 
+    const animals = [];
+    const lakes = [];
+    const buildables = []; // Костры и т.д.
+    let isGameOver = false;
+
+    // --- СИСТЕМА БИОМОВ (Органичные границы) ---
+    const biomeNodes = [];
+    const biomesList = ['winter', 'forest', 'desert', 'swamp'];
+    for(let i=0; i<45; i++) {
+        biomeNodes.push({
+            x: Math.random() * WORLD_SIZE, y: Math.random() * WORLD_SIZE,
+            type: biomesList[Math.floor(Math.random() * biomesList.length)]
+        });
+    }
+
+    function getBiome(x, y) {
+        let minDist = Infinity;
+        let closest = 'forest';
+        for(let n of biomeNodes) {
+            let d = (x - n.x)**2 + (y - n.y)**2;
+            if(d < minDist) { minDist = d; closest = n.type; }
+        }
+        return closest;
+    }
+
+    // Предрендеринг фона для высокой производительности
+    const bgCanvas = document.createElement('canvas');
+    bgCanvas.width = WORLD_SIZE; bgCanvas.height = WORLD_SIZE;
+    const bgCtx = bgCanvas.getContext('2d', {alpha: false});
+
+    function generateMap() {
+        const chunkSize = 20; // Детализация границ
+        for(let x=0; x<WORLD_SIZE; x+=chunkSize) {
+            for(let y=0; y<WORLD_SIZE; y+=chunkSize) {
+                let b = getBiome(x + chunkSize/2, y + chunkSize/2);
+                if(b==='winter') bgCtx.fillStyle = '#ecf0f1';
+                if(b==='forest') bgCtx.fillStyle = '#27ae60';
+                if(b==='desert') bgCtx.fillStyle = '#f1c40f';
+                if(b==='swamp') bgCtx.fillStyle = '#2c3e50'; // Темно-зелено-синее болото
+                bgCtx.fillRect(x, y, chunkSize, chunkSize);
+            }
+        }
+
+        // Озера (рисуем прямо на фон)
+        bgCtx.fillStyle = '#2980b9';
+        for(let i=0; i<35; i++) {
+            let lx = Math.random()*WORLD_SIZE, ly = Math.random()*WORLD_SIZE;
+            let lSize = Math.random() * 80 + 40;
+            let b = getBiome(lx, ly);
+            if(b === 'swamp') bgCtx.fillStyle = '#16a085'; // Грязная вода
+            else bgCtx.fillStyle = '#2980b9';
+            bgCtx.beginPath(); bgCtx.arc(lx, ly, lSize, 0, Math.PI*2); bgCtx.fill();
+            lakes.push({x: lx, y: ly, size: lSize});
+        }
+    }
+
+    function spawnWorld() {
+        generateMap();
+
+        // Ресурсы
+        for(let i=0; i<800; i++) {
+            let x = Math.random() * WORLD_SIZE;
+            let y = Math.random() * WORLD_SIZE;
+            let biome = getBiome(x, y);
+            
+            if (biome === 'forest') {
+                if(Math.random() < 0.6) resources.push(createRes('tree', x, y, 50, 40));
+                else if(Math.random() < 0.5) resources.push(createRes('bush', x, y, 30, 20));
+                else resources.push(createRes('rock', x, y, 35, 80));
+            } else if (biome === 'winter') {
+                if(Math.random() < 0.5) resources.push(createRes('dead_tree', x, y, 40, 30));
+                else resources.push(createRes('rock', x, y, 40, 100));
+            } else if (biome === 'desert') {
+                if(Math.random() < 0.4) resources.push(createRes('cactus', x, y, 30, 30));
+                else if(Math.random() < 0.7) resources.push(createRes('rock', x, y, 35, 80));
+                else resources.push(createRes('gold_rock', x, y, 30, 150)); 
+            } else if (biome === 'swamp') {
+                if(Math.random() < 0.4) resources.push(createRes('dead_tree', x, y, 50, 40));
+                else if(Math.random() < 0.7) resources.push(createRes('bush', x, y, 30, 20)); // Дают волокна
+            }
+        }
+
+        // Первичные животные
+        for(let i=0; i<100; i++) { spawnRandomAnimal(); }
+    }
+
+    function spawnRandomAnimal() {
+        let x = Math.random() * WORLD_SIZE;
+        let y = Math.random() * WORLD_SIZE;
+        let biome = getBiome(x, y);
+
+        if (biome === 'forest') {
+            if(Math.random() < 0.5) animals.push(createAnimal('deer', x, y, 28, 1.4, 25, false));
+            else if(Math.random() < 0.7) animals.push(createAnimal('wolf', x, y, 28, 1.2, 40, true));
+            else if(Math.random() < 0.5) animals.push(createAnimal('fox', x, y, 20, 1.5, 15, false));
+            else animals.push(createAnimal('bear', x, y, 40, 0.8, 100, true));
+        } else if (biome === 'winter') {
+            if(Math.random() < 0.5) animals.push(createAnimal('penguin', x, y, 18, 0.7, 15, false));
+            else animals.push(createAnimal('wolf', x, y, 28, 1.1, 40, true));
+        } else if (biome === 'desert') {
+            if(Math.random() < 0.6) animals.push(createAnimal('snake', x, y, 15, 1.0, 15, true));
+            else animals.push(createAnimal('camel', x, y, 35, 0.8, 60, false));
+        } else if (biome === 'swamp') {
+            animals.push(createAnimal('crocodile', x, y, 38, 0.9, 70, true));
+        }
+    }
+
+    function createRes(type, x, y, size, hp) { return { type: type, x: x, y: y, size: size, hp: hp, maxHp: hp }; }
+
+    function createAnimal(type, x, y, size, speed, hp, aggressive) {
+        return { type: type, x: x, y: y, size: size, speed: speed, hp: hp, maxHp: hp, aggressive: aggressive, vx: 0, vy: 0, timer: 0 };
+    }
+
+    function distance(x1, y1, x2, y2) { return Math.sqrt((x1-x2)**2 + (y1-y2)**2); }
+
+    function handleInteraction() {
+        if (!mouse.clicked || player.attackTimer > 0) return;
+        
+        let targetX = (mouse.x / ZOOM) + camera.x;
+        let targetY = (mouse.y / ZOOM) + camera.y;
+        
+        let reach = player.equip === 'spear' ? 110 : 70; 
+        let damage = player.equip === 'sword' ? 25 : (player.equip === 'spear' ? 18 : (player.equip === 'axe' ? 12 : 5));
+        let resourceDmg = player.equip === 'axe' ? 25 : 5;
+
+        // Поиск клика по животному
+        for (let i = animals.length - 1; i >= 0; i--) {
+            let a = animals[i];
+            if (distance(player.x, player.y, a.x, a.y) < reach && distance(targetX, targetY, a.x, a.y) < a.size + 10) {
+                a.hp -= damage;
+                a.x += (a.x - player.x) * 0.1; a.y += (a.y - player.y) * 0.1;
+                a.timer = 0; 
+                
+                if (a.hp <= 0) {
+                    player.inventory.meat += (a.size > 25 ? 2 : 1);
+                    if (['bear', 'wolf', 'camel', 'deer', 'fox', 'crocodile'].includes(a.type)) player.inventory.pelt += 1;
+                    animals.splice(i, 1);
+                }
+                player.attackTimer = 25; updateUI(); return;
+            }
+        }
+
+        // Поиск клика по ресурсу
+        for (let i = resources.length - 1; i >= 0; i--) {
+            let r = resources[i];
+            if (distance(player.x, player.y, r.x, r.y) < reach && distance(targetX, targetY, r.x, r.y) < r.size) {
+                r.hp -= resourceDmg;
+                if (r.hp <= 0) {
+                    if (r.type.includes('tree')) player.inventory.wood += Math.floor(Math.random()*3)+2;
+                    if (r.type === 'rock') player.inventory.stone += Math.floor(Math.random()*2)+1;
+                    if (r.type === 'bush') {
+                        player.inventory.berries += Math.floor(Math.random()*3)+1;
+                        player.inventory.fibers += Math.floor(Math.random()*2)+1;
+                    }
+                    if (r.type === 'gold_rock') player.inventory.gold += Math.floor(Math.random()*2)+1;
+                    if (r.type === 'cactus') { player.inventory.water += 1; player.health -= 2; } 
+                    resources.splice(i, 1);
+                }
+                player.attackTimer = 25; updateUI(); return;
+            }
+        }
+        player.attackTimer = 10; 
+    }
+
+    function updateAnimals() {
+        // Спавн новых животных, если их стало мало
+        if(animals.length < 90 && Math.random() < 0.02) spawnRandomAnimal();
+
+        animals.forEach(a => {
+            a.timer--;
+            let distToPlayer = distance(player.x, player.y, a.x, a.y);
+
+            if (a.aggressive) {
+                if (distToPlayer < 250) {
+                    let angle = Math.atan2(player.y - a.y, player.x - a.x);
+                    a.vx = Math.cos(angle) * a.speed;
+                    a.vy = Math.sin(angle) * a.speed;
+                    if (distToPlayer < a.size/2 + player.size/2) {
+                        player.health -= (a.type === 'crocodile' ? 1.0 : 0.4);
+                    }
+                } else if (a.timer <= 0) {
+                    let angle = Math.random() * Math.PI * 2;
+                    a.vx = Math.cos(angle) * (a.speed * 0.4);
+                    a.vy = Math.sin(angle) * (a.speed * 0.4);
+                    a.timer = Math.random() * 100 + 100;
+                }
+            } else {
+                if (distToPlayer < 180) {
+                    let angle = Math.atan2(a.y - player.y, a.x - player.x); 
+                    a.vx = Math.cos(angle) * (a.speed * 1.3); // Убегают быстрее
+                    a.vy = Math.sin(angle) * (a.speed * 1.3);
+                } else if (a.timer <= 0) {
+                    let angle = Math.random() * Math.PI * 2;
+                    a.vx = Math.cos(angle) * (a.speed * 0.3);
+                    a.vy = Math.sin(angle) * (a.speed * 0.3);
+                    a.timer = Math.random() * 150 + 50;
+                }
+            }
+
+            a.x += a.vx; a.y += a.vy;
+            if(a.x < 0) a.x = 0; if(a.x > WORLD_SIZE) a.x = WORLD_SIZE;
+            if(a.y < 0) a.y = 0; if(a.y > WORLD_SIZE) a.y = WORLD_SIZE;
+        });
+    }
+
+    function update() {
+        if (isGameOver) return;
+
+        if (keys.w && player.y > player.size/2) player.y -= player.speed;
+        if (keys.s && player.y < WORLD_SIZE - player.size/2) player.y += player.speed;
+        if (keys.a && player.x > player.size/2) player.x -= player.speed;
+        if (keys.d && player.x < WORLD_SIZE - player.size/2) player.x += player.speed;
+
+        camera.x = player.x - (canvas.width / 2) / ZOOM;
+        camera.y = player.y - (canvas.height / 2) / ZOOM;
+        if (camera.x < 0) camera.x = 0; if (camera.y < 0) camera.y = 0;
+        if (camera.x > WORLD_SIZE - canvas.width / ZOOM) camera.x = WORLD_SIZE - canvas.width / ZOOM;
+        if (camera.y > WORLD_SIZE - canvas.height / ZOOM) camera.y = WORLD_SIZE - canvas.height / ZOOM;
+
+        // Потребности (снижена скорость)
+        player.hunger -= 0.003;
+        player.thirst -= 0.005;
+        
+        // Температура биома
+        let currentBiome = getBiome(player.x, player.y);
+        let targetTemp = currentBiome === 'winter' ? 10 : (currentBiome === 'desert' ? 90 : 50);
+        
+        // Тепло от костров
+        buildables.forEach(b => {
+            if(b.type === 'campfire' && distance(player.x, player.y, b.x, b.y) < 150) {
+                targetTemp = 60; // Костер греет
+            }
+        });
+
+        // Одежда
+        if (player.hasClothes) {
+            if (targetTemp < 50) targetTemp += 25;
+            if (targetTemp > 50) targetTemp -= 15;
+        }
+
+        if (player.temp < targetTemp) player.temp += 0.05;
+        if (player.temp > targetTemp) player.temp -= 0.05;
+
+        // Восстановление здоровья (Естественная регенерация)
+        if (player.hunger > 70 && player.thirst > 70 && player.temp > 40 && player.temp < 60) {
+            player.health = Math.min(100, player.health + 0.02);
+        }
+
+        // Урон от потребностей
+        if (player.hunger <= 0) { player.hunger = 0; player.health -= 0.03; }
+        if (player.thirst <= 0) { player.thirst = 0; player.health -= 0.05; }
+        if (player.temp < 20 || player.temp > 80) player.health -= 0.04; 
+
+        if (player.attackTimer > 0) player.attackTimer--;
+        handleInteraction();
+        mouse.clicked = false; 
+
+        updateAnimals();
+
+        if (player.health <= 0) {
+            isGameOver = true;
+            document.getElementById('game-over').style.display = 'block';
+            let cause = "ВЫ ПОГИБЛИ";
+            if (player.hunger <= 0) cause = "ВЫ УМЕРЛИ ОТ ГОЛОДА";
+            else if (player.thirst <= 0) cause = "ВЫ УМЕРЛИ ОТ ЖАЖДЫ";
+            else if (player.temp < 20) cause = "ВЫ ЗАМЕРЗЛИ НАСМЕРТЬ";
+            else if (player.temp > 80) cause = "ВЫ СГОРЕЛИ НА СОЛНЦЕ";
+            document.getElementById('death-cause').innerText = cause;
+        }
+
+        // Обновление баров UI
+        document.getElementById('health-bar').style.width = Math.max(0, player.health) + '%';
+        document.getElementById('hunger-bar').style.width = Math.max(0, player.hunger) + '%';
+        document.getElementById('thirst-bar').style.width = Math.max(0, player.thirst) + '%';
+        
+        let tempEl = document.getElementById('temp-bar');
+        tempEl.style.width = '10px';
+        tempEl.style.left = Math.max(0, Math.min(100, player.temp)) + '%';
+        tempEl.style.background = 'white';
+    }
+
+    // --- УЛУЧШЕННЫЙ РЕНДЕР ЖИВОТНЫХ ---
+    function drawAnimal(o) {
+        ctx.save();
+        ctx.translate(o.x, o.y);
+        let angle = Math.atan2(o.vy, o.vx);
+        ctx.rotate(angle); // Животное смотрит вправо (+x)
+
+        if (o.type === 'deer') {
+            ctx.fillStyle = '#a0522d'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/3, 0, 0, Math.PI*2); ctx.fill(); // Тело
+            ctx.beginPath(); ctx.arc(o.size/2 + 5, 0, 8, 0, Math.PI*2); ctx.fill(); // Голова
+            ctx.strokeStyle = '#5d4037'; ctx.lineWidth=2; // Рога
+            ctx.beginPath(); ctx.moveTo(o.size/2 + 5, -4); ctx.lineTo(o.size/2 + 10, -15); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(o.size/2 + 5, 4); ctx.lineTo(o.size/2 + 10, 15); ctx.stroke();
+        } else if (o.type === 'fox') {
+            ctx.fillStyle = '#d35400'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/2.5, 0, 0, Math.PI*2); ctx.fill(); 
+            ctx.beginPath(); ctx.arc(o.size/2 + 4, 0, 6, 0, Math.PI*2); ctx.fill(); // Голова
+            ctx.beginPath(); ctx.ellipse(-o.size/2 - 4, 0, 8, 4, 0, 0, Math.PI*2); ctx.fill(); // Хвост
+        } else if (o.type === 'wolf') {
+            ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/2.5, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(o.size/2 + 5, 0, 7, 0, Math.PI*2); ctx.fill(); // Голова
+            ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(o.size/2 + 12, 0, 3, 0, Math.PI*2); ctx.fill(); // Нос
+        } else if (o.type === 'bear') {
+            ctx.fillStyle = '#5d4037'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/2, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(o.size/2 + 8, 0, 10, 0, Math.PI*2); ctx.fill(); 
+            ctx.beginPath(); ctx.arc(o.size/2 + 6, -8, 4, 0, Math.PI*2); ctx.fill(); // Уши
+            ctx.beginPath(); ctx.arc(o.size/2 + 6, 8, 4, 0, Math.PI*2); ctx.fill();
+        } else if (o.type === 'snake') {
+            ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(o.size/2, 0); ctx.quadraticCurveTo(0, 10, -o.size/2, 0); ctx.stroke();
+            ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(o.size/2 + 2, 0, 2, 0, Math.PI*2); ctx.fill(); // Глаз
+        } else if (o.type === 'crocodile') {
+            ctx.fillStyle = '#1e8449'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/3, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(o.size/2 + 8, 0, 10, 6, 0, 0, Math.PI*2); ctx.fill(); // Пасть
+            ctx.beginPath(); ctx.moveTo(-o.size/2, -4); ctx.lineTo(-o.size/2 - 15, 0); ctx.lineTo(-o.size/2, 4); ctx.fill(); // Хвост
+        } else if (o.type === 'penguin') {
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, o.size/2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-2, 0, o.size/2 - 3, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#f39c12'; ctx.beginPath(); ctx.moveTo(o.size/2, -2); ctx.lineTo(o.size/2 + 6, 0); ctx.lineTo(o.size/2, 2); ctx.fill(); // Клюв
+        } else if (o.type === 'camel') {
+            ctx.fillStyle = '#d4ac0d'; ctx.beginPath(); ctx.ellipse(0, 0, o.size/2, o.size/2.5, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(0, -o.size/3, 8, 0, Math.PI*2); ctx.fill(); // Горб
+            ctx.beginPath(); ctx.ellipse(o.size/2 + 10, 0, 6, 4, 0, 0, Math.PI*2); ctx.fill(); // Голова
+        }
+        
+        ctx.restore();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(ZOOM, ZOOM); // ПРИБЛИЖЕНИЕ
+        ctx.translate(-camera.x, -camera.y);
+
+        // Рисуем отрендеренный фон
+        ctx.drawImage(bgCanvas, 0, 0);
+
+        let renderQueue = [];
+        resources.forEach(r => renderQueue.push({ type: 'res', obj: r, y: r.y }));
+        animals.forEach(a => renderQueue.push({ type: 'animal', obj: a, y: a.y }));
+        buildables.forEach(b => renderQueue.push({ type: 'buildable', obj: b, y: b.y }));
+        renderQueue.push({ type: 'player', obj: player, y: player.y });
+        renderQueue.sort((a, b) => a.y - b.y);
+
+        let viewX = camera.x, viewY = camera.y, viewW = canvas.width/ZOOM, viewH = canvas.height/ZOOM;
+
+        renderQueue.forEach(item => {
+            let o = item.obj;
+            // Отсечение невидимого (Culling)
+            if(o.x < viewX - 50 || o.x > viewX + viewW + 50 || 
+               o.y < viewY - 50 || o.y > viewY + viewH + 50) return;
+
+            if (item.type === 'res') {
+                if (o.type === 'rock' || o.type === 'gold_rock') {
+                    ctx.fillStyle = o.type === 'gold_rock' ? '#f39c12' : '#7f8c8d';
+                    ctx.beginPath(); ctx.arc(o.x, o.y, o.size/2, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#2c3e50'; ctx.lineWidth=2; ctx.stroke();
+                } else if (o.type === 'cactus') {
+                    ctx.fillStyle = '#2ecc71';
+                    ctx.fillRect(o.x - o.size/4, o.y - o.size/2, o.size/2, o.size);
+                    ctx.fillRect(o.x - o.size/2, o.y - o.size/4, o.size, o.size/4);
+                } else if (o.type === 'dead_tree') {
+                    ctx.fillStyle = '#5d4037'; ctx.fillRect(o.x - 4, o.y - o.size/2, 8, o.size);
+                    ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + 15, o.y - 15); ctx.stroke();
+                } else {
+                    ctx.fillStyle = o.type === 'tree' ? '#1e8449' : '#229954';
+                    ctx.beginPath(); ctx.arc(o.x, o.y, o.size/2, 0, Math.PI*2); ctx.fill();
+                    if(o.type === 'bush' && o.hp > 0) {
+                        ctx.fillStyle = '#e74c3c'; // Красные ягоды
+                        ctx.beginPath(); ctx.arc(o.x-6, o.y-6, 3, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(o.x+8, o.y+4, 3, 0, Math.PI*2); ctx.fill();
+                    }
+                }
+            } else if (item.type === 'buildable') {
+                if (o.type === 'campfire') {
+                    ctx.fillStyle = '#7f8c8d'; ctx.beginPath(); ctx.arc(o.x, o.y, 12, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#e67e22'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, Math.PI*2); ctx.fill(); // Огонь
+                    ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(o.x, o.y-2, 4, 0, Math.PI*2); ctx.fill(); 
+                }
+            } else if (item.type === 'animal') {
+                drawAnimal(o);
+            } else if (item.type === 'player') {
+                let angle = Math.atan2((mouse.y/ZOOM + camera.y) - o.y, (mouse.x/ZOOM + camera.x) - o.x);
+                
+                ctx.fillStyle = player.hasClothes ? '#d35400' : '#3498db';
+                ctx.beginPath(); ctx.arc(o.x, o.y, o.size/2, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2; ctx.stroke();
+
+                ctx.fillStyle = '#f5b041'; // Голова
+                ctx.beginPath(); ctx.arc(o.x + Math.cos(angle)*4, o.y + Math.sin(angle)*4, 8, 0, Math.PI*2); ctx.fill();
+
+                let handX = o.x + Math.cos(angle+0.6) * 12;
+                let handY = o.y + Math.sin(angle+0.6) * 12;
+                ctx.fillStyle = '#f5b041';
+                ctx.beginPath(); ctx.arc(handX, handY, 4, 0, Math.PI*2); ctx.fill();
+
+                if (player.equip !== 'hands') {
+                    ctx.strokeStyle = player.equip === 'sword' ? '#bdc3c7' : '#8d6e63';
+                    ctx.lineWidth = player.equip === 'sword' ? 3 : 4;
+                    ctx.beginPath(); ctx.moveTo(handX, handY);
+                    
+                    let hitOffset = player.attackTimer > 15 ? 0.5 : 0;
+                    let wLen = player.equip === 'spear' ? 35 : 25; // Копье длиннее
+                    ctx.lineTo(handX + Math.cos(angle - hitOffset) * wLen, handY + Math.sin(angle - hitOffset) * wLen);
+                    ctx.stroke();
+                    
+                    if (player.equip === 'axe') {
+                        ctx.fillStyle = '#7f8c8d'; ctx.beginPath();
+                        ctx.arc(handX + Math.cos(angle - hitOffset) * 20, handY + Math.sin(angle - hitOffset) * 20, 6, angle, angle + Math.PI);
+                        ctx.fill();
+                    } else if (player.equip === 'spear') {
+                        ctx.fillStyle = '#bdc3c7'; ctx.beginPath(); // Наконечник
+                        ctx.arc(handX + Math.cos(angle - hitOffset) * wLen, handY + Math.sin(angle - hitOffset) * wLen, 3, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            }
+        });
+
+        ctx.restore();
+        // Экранные эффекты (без зума)
+        if (player.temp < 30) {
+            ctx.fillStyle = `rgba(0, 200, 255, ${0.3 - player.temp/100})`;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+        } else if (player.temp > 70) {
+            ctx.fillStyle = `rgba(255, 100, 0, ${(player.temp-70)/100})`;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('inv-berries').innerText = player.inventory.berries;
+        document.getElementById('inv-water').innerText = player.inventory.water;
+        document.getElementById('inv-wood').innerText = player.inventory.wood;
+        document.getElementById('inv-stone').innerText = player.inventory.stone;
+        document.getElementById('inv-meat').innerText = player.inventory.meat;
+        document.getElementById('inv-cooked-meat').innerText = player.inventory.cookedMeat;
+        document.getElementById('inv-pelt').innerText = player.inventory.pelt;
+        document.getElementById('inv-gold').innerText = player.inventory.gold;
+        document.getElementById('inv-fibers').innerText = player.inventory.fibers;
+        
+        let equipName = player.equip === 'axe' ? 'Топор' : (player.equip === 'sword' ? 'Меч' : (player.equip === 'spear' ? 'Копье' : 'Руки'));
+        document.getElementById('inv-equip').innerText = equipName;
+        document.getElementById('inv-clothes').innerText = player.hasClothes ? 'Надета' : 'Нет';
+
+        let nearWater = lakes.some(l => distance(player.x, player.y, l.x, l.y) < l.size + 30);
+        document.getElementById('btn-flask').disabled = !nearWater;
+
+        let nearFire = buildables.some(b => b.type === 'campfire' && distance(player.x, player.y, b.x, b.y) < 60);
+        document.getElementById('btn-cook').disabled = !(nearFire && player.inventory.meat > 0);
+    }
+
+    function consume(type) {
+        if (type === 'berry' && player.inventory.berries > 0 && player.hunger < 100) {
+            player.inventory.berries--; player.hunger = Math.min(100, player.hunger + 15);
+        } else if (type === 'meat' && player.inventory.meat > 0) {
+            player.inventory.meat--; player.hunger = Math.min(100, player.hunger + 25);
+            player.health -= 10; // Сырое мясо вредно
+        } else if (type === 'cooked-meat' && player.inventory.cookedMeat > 0) {
+            player.inventory.cookedMeat--; player.hunger = Math.min(100, player.hunger + 40);
+            player.health = Math.min(100, player.health + 20); // Лечит!
+        } else if (type === 'water' && player.inventory.water > 0 && player.thirst < 100) {
+            player.inventory.water--; player.thirst = Math.min(100, player.thirst + 30);
+            player.temp = Math.max(20, player.temp - 5);
+        }
+        updateUI();
+    }
+
+    function craft(item) {
+        if (item === 'axe' && player.inventory.wood >= 10 && player.inventory.stone >= 5) {
+            player.inventory.wood -= 10; player.inventory.stone -= 5;
+            player.equip = 'axe'; document.getElementById('btn-axe').disabled = true;
+        } else if (item === 'sword' && player.inventory.wood >= 15 && player.inventory.stone >= 10) {
+            player.inventory.wood -= 15; player.inventory.stone -= 10;
+            player.equip = 'sword'; document.getElementById('btn-sword').disabled = true;
+        } else if (item === 'spear' && player.inventory.wood >= 15 && player.inventory.stone >= 2 && player.inventory.fibers >= 5) {
+            player.inventory.wood -= 15; player.inventory.stone -= 2; player.inventory.fibers -= 5;
+            player.equip = 'spear'; document.getElementById('btn-spear').disabled = true;
+        } else if (item === 'clothes' && player.inventory.pelt >= 5 && !player.hasClothes) {
+            player.inventory.pelt -= 5; player.hasClothes = true;
+            document.getElementById('btn-clothes').disabled = true;
+        } else if (item === 'bandage' && player.inventory.fibers >= 10) {
+            player.inventory.fibers -= 10; 
+            player.health = Math.min(100, player.health + 30); // Моментальное лечение
+        } else if (item === 'campfire' && player.inventory.wood >= 15 && player.inventory.stone >= 10) {
+            player.inventory.wood -= 15; player.inventory.stone -= 10;
+            buildables.push({ type: 'campfire', x: player.x, y: player.y });
+        } else if (item === 'cook' && player.inventory.meat > 0) {
+            player.inventory.meat -= 1; player.inventory.cookedMeat += 1;
+        } else if (item === 'flask') {
+            player.inventory.water += 1; 
+        }
+        updateUI();
+    }
+
+    spawnWorld();
+    setInterval(updateUI, 500);
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+</script>
+</body>
+</html>
